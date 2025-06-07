@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>분석 중... 기다려주셔서 감사합니다!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-custom {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        /* Custom spinner */
+        .loader {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-100 to-indigo-200 min-h-screen flex flex-col items-center justify-center text-gray-700 p-4">
+    <div class="bg-white rounded-xl shadow-2xl p-8 md:p-12 max-w-lg w-full text-center">
+
+        <div class="loader"></div>
+
+        <h2 class="text-3xl font-bold text-gray-800 mb-4">
+            논문 분석이 진행 중입니다...
+        </h2>
+        <p class="text-gray-600 mb-6 text-lg">
+            잠시만 기다려주시면 AI가 심층 분석을 완료합니다.
+        </p>
+
+        <div class="space-y-3">
+            <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden shadow-inner">
+                <div id="progressBar"
+                     class="bg-blue-500 h-4 rounded-full transition-all duration-500 ease-out text-xs font-medium text-blue-100 text-center p-0.5 leading-none"
+                     style="width: 0%">
+                     <span id="progressText">0%</span>
+                </div>
+            </div>
+
+            <p id="message" class="text-sm text-blue-700 font-medium min-h-[20px]">
+                분석을 시작합니다...
+            </p>
+        </div>
+
+        <div class="mt-8 text-xs text-gray-500">
+            <p>Job ID: <span class="font-mono">{{ job_id }}</span></p>
+            <p class="mt-1">이 페이지는 자동으로 업데이트됩니다. 창을 닫지 마세요.</p>
+            <p class="mt-2">참고: 현재 시스템은 시뮬레이션 모드로 작동하며, 실제 분석 시간보다 빠르게 완료될 수 있습니다.</p>
+        </div>
+    </div>
+
+    <script>
+        const jobId = '{{ job_id }}'; // Injected by Flask's render_template
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const messageElement = document.getElementById('message');
+        let errorDisplayed = false; // Flag to prevent multiple error alerts/redirects
+
+        async function checkStatus() {
+            if (errorDisplayed) return; // Stop checking if an error has been handled
+
+            try {
+                const response = await fetch(`/status/${jobId}`);
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                const data = await response.json();
+
+                if (data.error) {
+                    handleError(`분석 중 오류 발생: ${data.error} (ID: ${jobId})`);
+                    return;
+                }
+
+                // Update progress bar and text
+                progressBar.style.width = `${data.progress}%`;
+                progressText.textContent = `${data.progress}%`;
+
+                // Update message - ensure it's not too long or causes layout shifts
+                let currentMessage = data.message || '상태 메시지 없음';
+                if (currentMessage.length > 100) { // Truncate if too long
+                    currentMessage = currentMessage.substring(0, 97) + "...";
+                }
+                messageElement.textContent = currentMessage;
+
+                if (data.status === 'completed') {
+                    // Analysis complete, redirect to the result page (or reload if already on it)
+                    // window.location.href = `/result/${jobId}`; // This would be the standard
+                    // However, result.html itself might initially render this loading page if status isn't complete.
+                    // So, a reload is often sufficient if the /result/<job_id> route handles both loading and result display.
+                    window.location.reload();
+                } else if (data.status === 'error') {
+                    handleError(`분석 실패: ${data.message} (ID: ${jobId})`);
+                } else {
+                    // Continue polling
+                    setTimeout(checkStatus, 1500); // Poll every 1.5 seconds
+                }
+            } catch (error) {
+                console.error('Status check error:', error);
+                // More robust error handling for network issues etc.
+                // messageElement.textContent = '상태 확인 중 오류 발생... 재시도 중.';
+                // Consider a retry limit or different message for persistent errors
+                setTimeout(checkStatus, 3000); // Wait longer before retrying on error
+            }
+        }
+
+        function handleError(errorMessage) {
+            if (errorDisplayed) return;
+            errorDisplayed = true;
+            console.error(errorMessage);
+            alert(errorMessage); // User-facing alert
+            // Redirect to home page on critical error
+            window.location.href = '/';
+        }
+
+        // Initial call to start polling
+        checkStatus();
+    </script>
+</body>
+</html>

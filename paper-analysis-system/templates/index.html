@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>논문 분석 시스템</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles if needed, or to complement Tailwind */
+        body {
+            font-family: 'Inter', sans-serif; /* A common sans-serif font */
+        }
+        .hero-gradient {
+            background: linear-gradient(120deg, #89f7fe 0%, #66a6ff 100%);
+        }
+        /* Add a little animation to the button */
+        #submitButton:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        #submitButton:active {
+            transform: translateY(0px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="min-h-screen flex flex-col items-center justify-center px-4 py-8 hero-gradient">
+        <div class="max-w-2xl w-full bg-white rounded-xl shadow-2xl p-8 md:p-12 space-y-8">
+
+            <div class="text-center">
+                <span class="text-5xl">🔬</span>
+                <h1 class="text-4xl font-bold text-gray-900 mt-2 mb-4">
+                    AI 논문 분석 시스템
+                </h1>
+                <p class="text-gray-600 text-lg">
+                    논문 URL을 입력하고 심층 분석 결과를 받아보세요.
+                </p>
+            </div>
+
+            <form id="analyzeForm" class="space-y-6">
+                <div>
+                    <label for="paperUrl" class="block text-sm font-medium text-gray-700 mb-2">
+                        논문 URL 입력 (PubMed, Nature, Cell, Science Direct 등)
+                    </label>
+                    <input
+                        type="url"
+                        id="paperUrl"
+                        name="paperUrl"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-shadow duration-200 ease-in-out"
+                        placeholder="https://pubmed.ncbi.nlm.nih.gov/..."
+                        required
+                    >
+                    <p id="urlError" class="text-red-500 text-sm mt-1 hidden">유효한 URL을 입력해주세요.</p>
+                </div>
+
+                <button
+                    type="submit"
+                    id="submitButton"
+                    class="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-200 ease-in-out"
+                >
+                    분석 시작 <span class="ml-2">🚀</span>
+                </button>
+            </form>
+
+            <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                <strong class="font-bold">오류 발생:</strong>
+                <span class="block sm:inline" id="errorMessageText"></span>
+            </div>
+
+            <div class="text-xs text-gray-500 text-center">
+                <p>&copy; 2024 AI Paper Analyzer. Powered by advanced AI models.</p>
+                <p class="mt-1">참고: 현재 시스템은 시뮬레이션 모드로 작동합니다. 실제 분석 결과가 아닐 수 있습니다.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const analyzeForm = document.getElementById('analyzeForm');
+        const paperUrlInput = document.getElementById('paperUrl');
+        const urlError = document.getElementById('urlError');
+        const errorMessageDiv = document.getElementById('errorMessage');
+        const errorMessageText = document.getElementById('errorMessageText');
+        const submitButton = document.getElementById('submitButton');
+
+        analyzeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            urlError.classList.add('hidden');
+            errorMessageDiv.classList.add('hidden');
+
+            const url = paperUrlInput.value.trim();
+
+            if (!isValidHttpUrl(url)) {
+                urlError.textContent = '유효한 URL 형식(http:// 또는 https://)으로 입력해주세요.';
+                urlError.classList.remove('hidden');
+                paperUrlInput.focus();
+                return;
+            }
+
+            submitButton.disabled = true;
+            submitButton.innerHTML = '분석 요청 중... <span class="animate-spin ml-2">⚙️</span>';
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url})
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    // Handle HTTP errors like 400, 500 etc.
+                    const errorMsg = data.error || `서버 오류: ${response.status}`;
+                    showError(errorMsg);
+                } else if (data.job_id) {
+                    // Successful request, redirect to result/loading page
+                    window.location.href = `/result/${data.job_id}`;
+                } else if (data.error) {
+                    // Error message from server in a 2xx response (less common)
+                    showError(data.error);
+                } else {
+                    // Unexpected response structure
+                    showError('알 수 없는 응답 형식입니다.');
+                }
+            } catch (error) {
+                // Network errors or other issues with fetch
+                console.error('Fetch error:', error);
+                showError('네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '분석 시작 <span class="ml-2">🚀</span>';
+            }
+        });
+
+        function isValidHttpUrl(string) {
+            let url;
+            try {
+                url = new URL(string);
+            } catch (_) {
+                return false;
+            }
+            return url.protocol === "http:" || url.protocol === "https:" || string.startsWith("http://localhost");
+        }
+
+        function showError(message) {
+            errorMessageText.textContent = message;
+            errorMessageDiv.classList.remove('hidden');
+        }
+
+        // Basic input validation feedback
+        paperUrlInput.addEventListener('blur', () => {
+            if (paperUrlInput.value && !isValidHttpUrl(paperUrlInput.value)) {
+                urlError.textContent = 'URL은 http:// 또는 https://로 시작해야 합니다.';
+                urlError.classList.remove('hidden');
+            } else {
+                urlError.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
